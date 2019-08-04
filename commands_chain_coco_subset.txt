@@ -1,0 +1,13 @@
+module load python_gpu/3.6.4 && export PYTHONPATH=/cluster/home/graulef/python/lib/python3.6/site-packages/bin:$PYTHONPATH && export PYTHONPATH=/cluster/home/graulef/python/lib/python3.6/site-packages/lib64/python3.6/site-packages:$PYTHONPATH && \
+\
+bsub -J "export_synth_coco_subset" -n 4 -R "rusage[mem=4500,ngpus_excl_p=2]" -W 24:00 python export_detections.py configs/chain_coco_subset/mp_export.yaml magic-point_synth --batch_size=5 --export_name=chain_coco_subset/mp_synth_export --pred_only && \
+\
+bsub -J "train_mp_coco_subset" -w "done(export_synth_coco_subset)" -n 4 -R "rusage[mem=4500,ngpus_excl_p=2]" -W 48:00 python experiment.py train configs/chain_coco_subset/mp_train.yaml chain_coco_subset/mp && \
+\
+bsub -J "test_mp_coco_subset" -w "done(train_mp_coco_subset)" -n 4 -R "rusage[mem=4500,ngpus_excl_p=1]" -W 4:00 python export_detections_repeatability.py configs/chain_coco_subset/mp_repeatability.yaml chain_coco_subset/mp --export_name=chain_coco_subset/mp_repeatability && \
+\
+bsub -J "export_trained_coco_subset" -w "done(test_mp_coco_subset)" -n 4 -R "rusage[mem=4500,ngpus_excl_p=2]" -W 24:00 python export_detections.py configs/chain_coco_subset/mp_export.yaml chain_coco_subset/mp --batch_size=5 --export_name=chain_coco_subset/mp_trained_export --pred_only && \
+\
+bsub -J "train_sp_coco_subset" -w "done(export_trained_coco_subset)" -n 4 -R "rusage[mem=4500,ngpus_excl_p=2]" -W 48:00 python experiment.py train configs/chain_coco_subset/sp_train.yaml chain_coco_subset/sp && \
+\
+bsub -J "test_sp_coco_subset" -w "done(train_sp_coco_subset)" -n 4 -R "rusage[mem=4500,ngpus_excl_p=2]" -W 4:00 python export_descriptors.py configs/chain_coco_subset/sp_test_patches.yaml chain_coco_subset/sp --export_name=chain_coco_subset/sp_descriptors

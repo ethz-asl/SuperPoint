@@ -42,8 +42,8 @@ if __name__ == '__main__':
                 data = next(test_set)
             except dataset.end_set:
                 break
-            data1 = {'image': data['image']}
-            data2 = {'image': data['warped_image']}
+            data1 = {'image': data['image'], 'image_ir': data['image']}
+            data2 = {'image': data['warped_image'], 'image_ir': data['warped_image']}
             pred1 = net.predict(data1, keys=['prob_nms', 'descriptors'])
             pred2 = net.predict(data2, keys=['prob_nms', 'descriptors'])
             pred = {'prob': pred1['prob_nms'],

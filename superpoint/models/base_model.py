@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod
+﻿from abc import ABCMeta, abstractmethod
 import tensorflow as tf
 from tensorflow.python.client import timeline
 import numpy as np
@@ -228,6 +228,7 @@ class BaseModel(metaclass=ABCMeta):
             # Generate iterators for the given tf datasets
             self.dataset_iterators = {}
             with tf.device('/cpu:0'):
+                tf.logging.info("datasets items : " + str(self.datasets.items()))
                 for n, d in self.datasets.items():
                     output_shapes = d.output_shapes
                     if n == 'training':
@@ -243,8 +244,10 @@ class BaseModel(metaclass=ABCMeta):
                     output_shapes = d.output_shapes
                     self.datasets[n] = d
 
+                    tf.logging.info("output_shapes : " + str(output_shapes))
                     # Perform compatibility checks with the inputs of the child model
                     for i, spec in self.input_spec.items():
+                        tf.logging.info("i: " + str(i) + ", spec: " + str(spec))
                         assert i in output_shapes
                         tf.TensorShape(output_shapes[i]).assert_is_compatible_with(
                                 tf.TensorShape(spec['shape']))
@@ -297,6 +300,17 @@ class BaseModel(metaclass=ABCMeta):
             with tf.device('/cpu:0'):
                 self.saver = tf.train.Saver(save_relative_paths=True,
                                             max_to_keep=keep_checkpoints)
+        load_cp = True
+        if load_cp:
+            model_path = checkpoint_path + "-36000"
+            print("Trying to restore model from " + model_path + ".")
+
+            try:
+                self.saver.restore(self.sess, model_path )
+                tf.logging.info("Model restored.")
+            except:
+                tf.logging.info("Model could not be restored")
+
         if not self.graph.finalized:
             self.graph.finalize()
         if profile:
@@ -304,7 +318,7 @@ class BaseModel(metaclass=ABCMeta):
             run_metadata = tf.RunMetadata()
         else:
             options, run_metadata = None, None
-
+        
         tf.logging.info('Start training')
         for i in range(iterations):
             loss, summaries, _ = self.sess.run(

@@ -6,6 +6,7 @@ from superpoint.datasets.utils import photometric_augmentation as photaug
 from superpoint.models.homographies import (sample_homography, compute_valid_mask,
                                             warp_points, filter_points)
 
+import logging
 
 def parse_primitives(names, all_primitives):
     p = all_primitives if (names == 'all') \
@@ -50,6 +51,54 @@ def homographic_augmentation(data, add_homography=False, **config):
         warped_points = filter_points(warped_points, image_shape)
 
     ret = {**data, 'image': warped_image, 'keypoints': warped_points,
+           'valid_mask': valid_mask}
+    if add_homography:
+        ret['homography'] = homography
+    return ret
+
+# Augment both optical and thermal images
+def photometric_augmentation_multispectral(data, **config):
+    with tf.name_scope('photometric_augmentation'):
+        primitives = parse_primitives(config['primitives'], photaug.augmentations)
+        prim_configs = [config['params'].get(
+                             p, {}) for p in primitives]
+
+        indices = tf.range(len(primitives))
+        if config['random_order']:
+            indices = tf.random_shuffle(indices)
+
+        def step(i, image):
+            fn_pairs = [(tf.equal(indices[i], j),
+                         lambda p=p, c=c: getattr(photaug, p)(image, **c))
+                        for j, (p, c) in enumerate(zip(primitives, prim_configs))]
+            image = tf.case(fn_pairs)
+            return i + 1, image
+
+        _, image = tf.while_loop(lambda i, image: tf.less(i, len(primitives)),
+                                 step, [0, data['image']], parallel_iterations=1)
+        _, image_ir = tf.while_loop(lambda i, image: tf.less(i, len(primitives)),
+                                 step, [0, data['image_ir']], parallel_iterations=1)
+
+    return {**data, 'image': image, 'image_ir': image_ir}
+
+# Augment both optical and thermal images
+def homographic_augmentation_multispectral(data, add_homography=False, **config):
+    with tf.name_scope('homographic_augmentation'):
+        image_shape = tf.shape(data['image'])[:2]
+        homography = sample_homography(image_shape, **config['params'])[0]
+
+        logging.info("Doing multispectral homographic augmentation")
+        warped_image = tf.contrib.image.transform(
+                data['image'], homography, interpolation='BILINEAR')
+        warped_image_ir = tf.contrib.image.transform(
+                data['image_ir'], homography, interpolation='BILINEAR')
+        valid_mask = compute_valid_mask(image_shape, homography,
+                                        config['valid_border_margin'])
+
+        warped_points = warp_points(data['keypoints'], homography)
+        warped_points = filter_points(warped_points, image_shape)
+        
+    ret = {**data, 'image': warped_image, 'image_ir': warped_image_ir, 'keypoints': warped_points,
            'valid_mask': valid_mask}
     if add_homography:
         ret['homography'] = homography

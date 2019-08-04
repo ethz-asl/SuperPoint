@@ -194,7 +194,8 @@ class SyntheticShapes(BaseDataset):
         elif split_name == 'test':
             data = data.take(config['test_size'])
 
-        data = data.map(lambda image, kp: {'image': image, 'keypoints': kp})
+        # Add dummy image_ir
+        data = data.map(lambda image, kp: {'image': image, 'image_ir': image, 'keypoints': kp})
         data = data.map(pipeline.add_dummy_valid_mask)
 
         if config['cache_in_memory'] and not config['on-the-fly']:

@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 import tensorflow as tf
 
+import logging
 
 augmentations = [
         'additive_gaussian_noise',
@@ -9,9 +10,9 @@ augmentations = [
         'random_brightness',
         'random_contrast',
         'additive_shade',
-        'motion_blur'
+        'motion_blur',
+        'negative'
 ]
-
 
 def additive_gaussian_noise(image, stddev_range=[5, 95]):
     stddev = tf.random_uniform((), *stddev_range)
@@ -90,3 +91,9 @@ def motion_blur(image, max_kernel_size=10):
 
     blurred = tf.py_func(_py_motion_blur, [image], tf.float32)
     return tf.reshape(blurred, tf.shape(image))
+
+def negative(image):
+    logging.info("Using negative photometric data augmentation!")
+    neg_image = 255 - image
+    neg_image = tf.clip_by_value(neg_image, 0, 255)
+    return neg_image

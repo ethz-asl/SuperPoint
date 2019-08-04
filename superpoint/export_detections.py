@@ -8,6 +8,8 @@ from tqdm import tqdm
 import experiment
 from superpoint.settings import EXPER_PATH
 
+import logging
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -67,9 +69,17 @@ if __name__ == '__main__':
             # Export
             d2l = lambda d: [dict(zip(d, e)) for e in zip(*d.values())]  # noqa: E731
             for p, d in zip(d2l(pred), d2l(data)):
-                if not ('name' in d):
+                
+                if not ('name' in d or 'name_ir' in d):
+                    logging.info("Did not find name in d for = " + d)
                     p.update(d)  # Can't get the data back from the filename --> dump
-                filename = d['name'].decode('utf-8') if 'name' in d else str(i)
+                if 'name' in d:
+                  filename = d['name'].decode('utf-8')
+                elif 'name_ir' in d:
+                  filename = d['name_ir'].decode('utf-8')
+                else:
+                  filename = str(i)
+
                 filepath = Path(output_dir, '{}.npz'.format(filename))
                 np.savez_compressed(filepath, **p)
                 i += 1

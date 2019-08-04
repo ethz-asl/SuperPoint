@@ -8,6 +8,8 @@ from tqdm import tqdm
 import experiment
 from superpoint.settings import EXPER_PATH
 
+import logging
+
 
 if __name__ == '__main__':
 
@@ -23,7 +25,7 @@ if __name__ == '__main__':
         config = yaml.load(f)
     assert 'eval_iter' in config
 
-    output_dir = Path(EXPER_PATH, 'outputs/{}/'.format(export_name))
+    output_dir = Path(EXPER_PATH, 'optical/outputs/{}/'.format(export_name))
     if not output_dir.exists():
         os.makedirs(output_dir)
     checkpoint = Path(EXPER_PATH, experiment_name)
@@ -42,13 +44,15 @@ if __name__ == '__main__':
                 data = next(test_set)
             except dataset.end_set:
                 break
-            data1 = {'image': data['image']}
-            data2 = {'image': data['warped_image']}
+            # Second element image_ir not used, just passed as placeholder
+            # (no multispectral homography here, only predict on original & warped image)
+            data1 = {'image': data['image'], 'image_ir': data['image_ir']}
+            data2 = {'image': data['warped_image'], 'image_ir': data['image_ir']}
             prob1 = net.predict(data1, keys='prob_nms')
             prob2 = net.predict(data2, keys='prob_nms')
             pred = {'prob': prob1, 'warped_prob': prob2,
                     'homography': data['homography']}
-
+            logging.info("Data = " + str(len(data)))
             if not ('name' in data):
                 pred.update(data)
             filename = data['name'].decode('utf-8') if 'name' in data else str(i)

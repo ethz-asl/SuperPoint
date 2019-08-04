@@ -11,8 +11,8 @@ from superpoint.settings import DATA_PATH
 
 class PatchesDataset(BaseDataset):
     default_config = {
-        'dataset': 'hpatches',  # or 'coco'
-        'alteration': 'all',  # 'all', 'i' for illumination or 'v' for viewpoint
+        'dataset': 'coco_joint',  # 'hpatches' or 'coco'
+        'alteration': 'v',  # 'all', 'i' for illumination or 'v' for viewpoint
         'cache_in_memory': False,
         'truncate': None,
         'preprocessing': {
@@ -21,10 +21,11 @@ class PatchesDataset(BaseDataset):
     }
 
     def _init_dataset(self, **config):
-        dataset_folder = 'COCO/patches' if config['dataset'] == 'coco' else 'HPatches'
+        dataset_folder = config['dataset'] + '/patches' #'COCO/patches' if config['dataset'] == 'coco' else 'HPatches'
         base_path = Path(DATA_PATH, dataset_folder)
         folder_paths = [x for x in base_path.iterdir() if x.is_dir()]
         image_paths = []
+        image_paths_ir = []
         warped_image_paths = []
         homographies = []
         for path in folder_paths:
@@ -32,17 +33,20 @@ class PatchesDataset(BaseDataset):
                 continue
             if config['alteration'] == 'v' and path.stem[0] != 'v':
                 continue
-            num_images = 1 if config['dataset'] == 'coco' else 5
+            num_images = 1 # if config['dataset'] == 'warm_joint' else 5  # coco
             file_ext = '.ppm' if config['dataset'] == 'hpatches' else '.jpg'
             for i in range(2, 2 + num_images):
                 image_paths.append(str(Path(path, "1" + file_ext)))
+                image_paths_ir.append(str(Path(path, "1_ir" + file_ext)))
                 warped_image_paths.append(str(Path(path, str(i) + file_ext)))
                 homographies.append(np.loadtxt(str(Path(path, "H_1_" + str(i)))))
         if config['truncate']:
             image_paths = image_paths[:config['truncate']]
+            image_paths_ir = image_paths_ir[:config['truncate']]
             warped_image_paths = warped_image_paths[:config['truncate']]
             homographies = homographies[:config['truncate']]
         files = {'image_paths': image_paths,
+                 'image_paths_ir': image_paths_ir,
                  'warped_image_paths': warped_image_paths,
                  'homography': homographies}
         return files
@@ -77,19 +81,22 @@ class PatchesDataset(BaseDataset):
 
         images = tf.data.Dataset.from_tensor_slices(files['image_paths'])
         images = images.map(lambda path: tf.py_func(_read_image, [path], tf.uint8))
+        images_ir = tf.data.Dataset.from_tensor_slices(files['image_paths_ir'])
+        images_ir = images_ir.map(lambda path: tf.py_func(_read_image, [path], tf.uint8))
         homographies = tf.data.Dataset.from_tensor_slices(np.array(files['homography']))
         if config['preprocessing']['resize']:
             homographies = tf.data.Dataset.zip({'image': images,
                                                 'homography': homographies})
             homographies = homographies.map(_adapt_homography_to_preprocessing)
         images = images.map(_preprocess)
+        images_ir = images_ir.map(_preprocess)
         warped_images = tf.data.Dataset.from_tensor_slices(files['warped_image_paths'])
         warped_images = warped_images.map(lambda path: tf.py_func(_read_image,
                                                                   [path],
                                                                   tf.uint8))
         warped_images = warped_images.map(_preprocess)
 
-        data = tf.data.Dataset.zip({'image': images, 'warped_image': warped_images,
+        data = tf.data.Dataset.zip({'image': images, 'image_ir': images_ir, 'warped_image': warped_images,
                                     'homography': homographies})
 
         return data

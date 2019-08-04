@@ -1,0 +1,13 @@
+module load python_gpu/3.6.4 && export PYTHONPATH=/cluster/home/graulef/python/lib/python3.6/site-packages/bin:$PYTHONPATH && export PYTHONPATH=/cluster/home/graulef/python/lib/python3.6/site-packages/lib64/python3.6/site-packages:$PYTHONPATH && \
+\
+bsub -J "export_synth_one_image_coco" -n 4 -R "rusage[mem=4500,ngpus_excl_p=1]" -W 24:00 python export_detections.py configs/chain_one_image_coco/mp_export.yaml magic-point_synth --batch_size=5 --export_name=chain_one_image_coco/mp_synth_export --pred_only && \
+\
+bsub -J "train_mp_one_image_coco" -w "done(export_synth_one_image_coco)" -n 4 -R "rusage[mem=4500,ngpus_excl_p=1]" -W 48:00 python experiment.py train configs/chain_one_image_coco/mp_train.yaml chain_one_image_coco/mp && \
+\
+bsub -J "test_mp_one_image_coco" -w "done(train_mp_one_image_coco)" -n 4 -R "rusage[mem=4500,ngpus_excl_p=1]" -W 4:00 python export_detections_repeatability.py configs/chain_one_image_coco/mp_repeatability.yaml chain_one_image_coco/mp --export_name=chain_one_image_coco/mp_repeatability && \
+\
+bsub -J "export_trained_one_image_coco" -w "done(test_mp_one_image_coco)" -n 4 -R "rusage[mem=4500,ngpus_excl_p=1]" -W 24:00 python export_detections.py configs/chain_one_image_coco/mp_export.yaml chain_one_image_coco/mp --batch_size=5 --export_name=chain_one_image_coco/mp_trained_export --pred_only && \
+\
+bsub -J "train_sp_one_image_coco" -w "done(export_trained_one_image_coco)" -n 4 -R "rusage[mem=4500,ngpus_excl_p=1]" -W 48:00 python experiment.py train configs/chain_one_image_coco/sp_train.yaml chain_one_image_coco/sp && \
+\
+bsub -J "test_sp_one_image_coco" -w "done(train_sp_one_image_coco)" -n 4 -R "rusage[mem=4500,ngpus_excl_p=1]" -W 4:00 python export_descriptors.py configs/chain_one_image_coco/sp_test_patches.yaml chain_one_image_coco/sp --export_name=chain_one_image_coco/sp_descriptors

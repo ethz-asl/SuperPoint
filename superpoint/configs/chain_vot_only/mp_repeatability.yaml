@@ -1,0 +1,30 @@
+﻿data:
+    name: 'patches_dataset'
+    dataset: 'vot_only'
+    alteration: 'v'
+    preprocessing:
+        resize: False
+model:
+    name: 'magic_point'
+    batch_size: 50
+    eval_batch_size: 50
+    learning_rate: 0.001
+    detection_threshold: 0.001
+    nms: 4
+    top_k: 1000
+    homography_adaptation: #not used
+        num: 0
+        aggregation: 'sum'
+        filter_counts: 0
+        homographies:
+            translation: true
+            rotation: true
+            scaling: true
+            perspective: true
+            scaling_amplitude: 0.2
+            perspective_amplitude_x: 0.1
+            perspective_amplitude_y: 0.1
+            allow_artifacts: false
+            patch_ratio: 0.9
+            max_angle: 0.3925 # pi/8
+eval_iter: 100

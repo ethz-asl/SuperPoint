@@ -1,0 +1,26 @@
+﻿data:
+    name: 'one_image_icip_two'
+    cache_in_memory: false
+    validation_size: 1
+model:
+    name: 'magic_point'
+    batch_size: 1
+    learning_rate: 0.001
+    detection_threshold: 0.015  # 0.001
+    nms: 4
+    # top_k: 600
+    homography_adaptation:
+        num: 1000
+        aggregation: 'sum'
+        filter_counts: 0
+        homographies:
+            translation: true
+            rotation: true
+            scaling: true
+            perspective: true
+            scaling_amplitude: 0.2
+            perspective_amplitude_x: 0.05
+            perspective_amplitude_y: 0.05
+            allow_artifacts: false
+            patch_ratio: 0.95
+eval_iter: -1

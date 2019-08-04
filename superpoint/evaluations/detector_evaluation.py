@@ -9,7 +9,7 @@ def get_paths(exper_name):
     """
     Return a list of paths to the outputs of the experiment.
     """
-    return glob(osp.join(EXPER_PATH, 'outputs/{}/*.npz'.format(exper_name)))
+    return glob(osp.join(EXPER_PATH, 'optical/outputs/{}/*.npz'.format(exper_name)))
 
 
 def compute_tp_fp(data, remove_zero=1e-4, distance_thresh=2, simplified=False):

@@ -1,0 +1,31 @@
+﻿data:
+    name: 'patches_dataset'
+    dataset: 'one_image_coco_two'
+    alteration: 'v'  # 'all' 'i' 'v'
+    preprocessing:
+        resize: False
+model:
+    name: 'super_point'
+    batch_size: 1
+    eval_batch_size: 1
+    learning_rate: 0.001
+    detection_threshold: 0.001 # 1/65
+    nms: 4
+    top_k: 1000
+    homography_adaptation:
+        num: 0
+        aggregation: 'sum'
+        filter_counts: 10
+        homographies:
+            translation: true
+            rotation: true
+            scaling: true
+            perspective: true
+            scaling_amplitude: 0.2
+            perspective_amplitude_x: 0.05
+            perspective_amplitude_y: 0.05
+            patch_ratio: 0.95
+            max_angle: 1.57
+            allow_artifacts: false
+eval_iter: 1
+seed: 1

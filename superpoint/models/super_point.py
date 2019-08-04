@@ -3,11 +3,12 @@ import tensorflow as tf
 from .base_model import BaseModel, Mode
 from .backbones.vgg import vgg_backbone
 from . import utils
-
+import logging
 
 class SuperPoint(BaseModel):
     input_spec = {
-            'image': {'shape': [None, None, None, 1], 'type': tf.float32}
+            'image': {'shape': [None, None, None, 1], 'type': tf.float32},
+            'image_ir': {'shape': [None, None, None, 1], 'type': tf.float32}
     }
     required_config_keys = []
     default_config = {
@@ -18,7 +19,6 @@ class SuperPoint(BaseModel):
             'batch_size': 32,
             'learning_rate': 0.001,
             'lambda_d': 250,
-            'descriptor_size': 256,
             'positive_margin': 1,
             'negative_margin': 0.2,
             'lambda_loss': 0.0001,
@@ -37,10 +37,38 @@ class SuperPoint(BaseModel):
             descriptors = utils.descriptor_head(features, **config)
             return {**detections, **descriptors}
 
-        results = net(inputs['image'])
+        image_opt = inputs['image']
+        image_ir = inputs['image_ir']
+
+        def pass_opt_image():
+            logging.info("Pass opt image called.")
+            return image_opt
+ 
+        def pass_ir_image():
+            logging.info("Pass ir image called.")
+            return image_ir
+
+        p_order = tf.random_uniform(shape=[], minval=0., maxval=1., dtype=tf.float32)
+        pred = tf.less(p_order, 0.5)
+        input_image = tf.cond(pred, pass_opt_image, pass_ir_image) #image_opt
+
+        results = net(input_image)
 
         if config['training']:
-            warped_results = net(inputs['warped']['image'])
+            image_opt_warped = inputs['warped']['image']
+            image_ir_warped = inputs['warped']['image_ir']
+
+            def pass_opt_image_warped():
+                 logging.info("Pass opt image warped called.")
+                 return image_opt_warped
+ 
+            def pass_ir_image_warped():
+                logging.info("Pass ir image warped called.")
+                return image_ir_warped
+
+            input_image_warped = tf.cond(pred, pass_ir_image_warped, pass_opt_image_warped) #image_ir_warped
+
+            warped_results = net(input_image_warped)
             results = {**results, 'warped_results': warped_results,
                        'homography': inputs['warped']['homography']}
 

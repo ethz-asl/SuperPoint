@@ -2,8 +2,11 @@ import tensorflow as tf
 from tensorflow.contrib.image import transform as H_transform
 from math import pi
 import cv2 as cv
+import random
 
 from superpoint.utils.tools import dict_update
+
+import logging
 
 
 homography_adaptation_default_config = {
@@ -86,6 +89,107 @@ def homography_adaptation(image, net, config):
     counts = tf.reduce_sum(counts, axis=-1)
     max_prob = tf.reduce_max(probs, axis=-1)
     mean_prob = tf.reduce_sum(probs, axis=-1) / counts
+
+    if config['aggregation'] == 'max':
+        prob = max_prob
+    elif config['aggregation'] == 'sum':
+        prob = mean_prob
+    else:
+        raise ValueError('Unkown aggregation method: {}'.format(config['aggregation']))
+
+    if config['filter_counts']:
+        prob = tf.where(tf.greater_equal(counts, config['filter_counts']),
+                        prob, tf.zeros_like(prob))
+
+    return {'prob': prob, 'counts': counts,
+            'mean_prob': mean_prob, 'input_images': images, 'H_probs': probs}  # debug
+
+
+def homography_adaptation_multispectral(image_opt, image_ir, net, config):
+    """Perfoms homography adaptation.
+    Inference using multiple random warped patches of the same input image for robust
+    predictions.
+    Arguments:
+        image_opt: A `Tensor` with shape `[N, H, W, 1]` with optical data
+        image_ir: A `Tensor` with shape `[N, H, W, 1]` with thermal data
+        net: A function that takes an image as input, performs inference, and outputs the
+            prediction dictionary.
+        config: A configuration dictionary containing optional entries such as the number
+            of sampled homographies `'num'`, the aggregation method `'aggregation'`.
+    Returns:
+        A dictionary which contains the aggregated detection probabilities.
+    """
+
+    probs = net(image_opt)['prob']
+    counts = tf.ones_like(probs)
+    images = image_opt
+
+    probs = tf.expand_dims(probs, axis=-1)
+    counts = tf.expand_dims(counts, axis=-1)
+    images = tf.expand_dims(images, axis=-1)
+
+    shape = tf.shape(image_opt)[1:3]
+    config = dict_update(homography_adaptation_default_config, config)
+
+    def pass_opt_image():
+        logging.info("Pass opt image called.")
+        return image_opt
+ 
+    def pass_ir_image():
+        logging.info("Pass ir image called.")
+        return image_ir
+
+    def step(i, probs, counts, images):
+        # Sample image patch
+        H = sample_homography(shape, **config['homographies'])
+        H_inv = invert_homography(H)
+        
+        # Randomly sample from optical or thermal image (set to always thermal for now)
+        # Uniform variable in [0,1)
+        
+        p_order = tf.random_uniform(shape=[], minval=0., maxval=1., dtype=tf.float32)
+        pred = tf.less(p_order, 0.5)
+        image_to_warp = tf.cond(pred, pass_opt_image, pass_ir_image)
+
+        #image_to_warp = pass_ir_image()
+        
+        warped = H_transform(image_to_warp, H, interpolation='BILINEAR')
+        count = H_transform(tf.expand_dims(tf.ones(tf.shape(image_to_warp)[:3]), -1),
+                       	    H_inv, interpolation='NEAREST')[..., 0]
+
+        # Predict detection probabilities
+        warped_shape = tf.to_int32(
+                tf.to_float(shape)*config['homographies']['patch_ratio'])
+        input_warped = tf.image.resize_images(warped, warped_shape)
+        prob = net(input_warped)['prob']
+        prob = tf.image.resize_images(tf.expand_dims(prob, axis=-1), shape)[..., 0]
+        prob_proj = H_transform(tf.expand_dims(prob, -1), H_inv,
+                                interpolation='BILINEAR')[..., 0]
+
+        probs = tf.concat([probs, tf.expand_dims(prob_proj, -1)], axis=-1)
+        counts = tf.concat([counts, tf.expand_dims(count, -1)], axis=-1)
+        images = tf.concat([images, tf.expand_dims(warped, -1)], axis=-1)
+        return i + 1, probs, counts, images
+
+    _, probs, counts, images = tf.while_loop(
+            lambda i, p, c, im: tf.less(i, config['num'] - 1),
+            step,
+            [0, probs, counts, images],
+            parallel_iterations=1,
+            back_prop=False,
+            shape_invariants=[
+                    tf.TensorShape([]),
+                    tf.TensorShape([None, None, None, None]),
+                    tf.TensorShape([None, None, None, None]),
+                    tf.TensorShape([None, None, None, 1, None])])
+
+    logging.info("Before aggregation: Size counts: " + str(counts.shape) + ", Size probs: " + str(probs.shape))
+
+    counts = tf.reduce_sum(counts, axis=-1)
+    max_prob = tf.reduce_max(probs, axis=-1)
+    mean_prob = tf.reduce_sum(probs, axis=-1) / counts
+
+    logging.info("After aggregation: Size counts: " + str(counts.shape) + ", Size mean probs: " + str(mean_prob.shape) + ", Size max probs: " + str(max_prob.shape))
 
     if config['aggregation'] == 'max':
         prob = max_prob

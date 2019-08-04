@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import cv2
 from os import path as osp
 from glob import glob
@@ -61,21 +61,45 @@ def compute_homography(data, keep_k_points=1000, correctness_thresh=3, orb=False
     # Keeps only the points shared between the two views
     keypoints = keep_shared_points(data['prob'],
                                    real_H, keep_k_points)
+    #print(keypoints.shape)
     warped_keypoints = keep_shared_points(data['warped_prob'],
                                           np.linalg.inv(real_H), keep_k_points)
-    desc = data['desc'][keypoints[:, 0], keypoints[:, 1]]
-    warped_desc = data['warped_desc'][warped_keypoints[:, 0],
+    #print(warped_keypoints.shape)
+    #print("Shape desc:" + str(data['desc'].shape))
+    #print("Shape warped desc:" + str(data['warped_desc'].shape))
+    desc = data['desc'][:, keypoints[:, 0], keypoints[:, 1]]
+    warped_desc = data['warped_desc'][:, warped_keypoints[:, 0],
                                       warped_keypoints[:, 1]]
+    desc = np.swapaxes(desc,0,1)
+    warped_desc = np.swapaxes(warped_desc,0,1)
 
+    #print("Shape desc after adding kps:" + str(desc.shape))
+    #print("Shape warped desc after adding kps:" + str(warped_desc.shape))
+    #print("Type desc: " + str(desc.dtype))
+    #print("Type warped desc: " + str(warped_desc.dtype))
+    
     # Match the keypoints with the warped_keypoints with nearest neighbor search
     if orb:
         desc = desc.astype(np.uint8)
         warped_desc = warped_desc.astype(np.uint8)
         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
     else:
-        bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+        bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True) # added crossCheck and changed to L1
     matches = bf.match(desc, warped_desc)
+    if matches == []:
+        print("No matches found")
+        empty_inliers = np.array([])
+        empty_homography = np.array([])
+        return {'correctness': 0.,
+                'keypoints1': keypoints,
+                'keypoints2': warped_keypoints,
+                'matches': matches,
+                'inliers': empty_inliers,
+                'homography': empty_homography}
+    else:
+        print("Matches found: " + str(len(matches)))
     matches_idx = np.array([m.queryIdx for m in matches])
+    #print(matches_idx)
     m_keypoints = keypoints[matches_idx, :]
     matches_idx = np.array([m.trainIdx for m in matches])
     m_warped_keypoints = warped_keypoints[matches_idx, :]
